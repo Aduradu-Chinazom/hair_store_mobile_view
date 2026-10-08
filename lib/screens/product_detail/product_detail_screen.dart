@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../providers/cart_provider.dart';
+import '../../providers/product_provider.dart';
 import '../../widgets/app_footer.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/custom_button.dart';
@@ -17,7 +20,12 @@ class _Review {
 }
 
 class ProductDetailScreen extends StatefulWidget {
-  const ProductDetailScreen({super.key});
+  final Product? product;
+
+  const ProductDetailScreen({
+    super.key,
+    this.product,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -37,39 +45,20 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   bool _wishlisted = false;
   bool _showStickyBar = false;
 
-  // Replace with API data
-  final List<String> _images = const ['', '', '', '', ''];
-
-  final List<String> _tags = const [
-    'Great smell',
-    'Nice gift',
-    'Good packaging',
-    'Elegant',
-    'Nice',
-    'Really pretty',
-  ];
-
   final List<_Review> _reviews = const [
     _Review('Ilo******', '14 Sept', 'Good quality product'),
     _Review('m***k', '19 Sept',
         'Would definitely buy again. It smells so nice and fragrant!'),
     _Review('haslf****', '19 Sept', 'This brand can take all my money'),
-    _Review('haslf****', '19 Sept', 'This brand can take all my money'),
   ];
-
-  final List<Product> _suggestions = List.generate(
-    8,
-        (i) => const Product(
-      title: 'Gisou Honey Infused Hair Oil',
-      price: '\$15.50',
-      size: '(30ml)',
-    ),
-  );
 
   @override
   void initState() {
     super.initState();
     _scroll.addListener(_checkCtaVisibility);
+    if (widget.product != null) {
+      _wishlisted = widget.product!.isWishlisted;
+    }
   }
 
   @override
@@ -79,7 +68,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     super.dispose();
   }
 
-  // Show the sticky bar once the main Add to cart button scrolls off the top
   void _checkCtaVisibility() {
     final ctx = _ctaKey.currentContext;
     if (ctx == null) return;
@@ -94,8 +82,48 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
   }
 
+  void _handleAddToCart(Product product) {
+    context.read<CartProvider>().addToCart(product, quantity: _qty);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Added ${product.title} (x$_qty) to cart'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: _brown,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final productProvider = context.watch<ProductProvider>();
+    final product = widget.product ??
+        productProvider.selectedProduct ??
+        const Product(
+          id: 'prod_101',
+          title: 'Gisou Honey Infused Hair Oil (0.7 Fl Oz)',
+          price: '\$50.00',
+          size: '(30ml)',
+          description:
+              'Intense hydration, long-lasting frizz control, up to 450°F heat protection, glossy shine, suitable for all hair types',
+          brand: 'Gisou',
+        );
+
+    final suggestions = productProvider.products.isNotEmpty
+        ? productProvider.products
+        : List.generate(
+            8,
+            (i) => const Product(
+              title: 'Gisou Honey Infused Hair Oil',
+              price: '\$15.50',
+              size: '(30ml)',
+            ),
+          );
+
+    final imageList = product.images.isNotEmpty
+        ? product.images
+        : [product.imageUrl, '', '', '', ''];
+
     return Scaffold(
       backgroundColor: _bg,
       body: Stack(
@@ -103,11 +131,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           CustomScrollView(
             controller: _scroll,
             slivers: [
-              const SliverToBoxAdapter(child: AppHeader(showTabs: false)),
-              SliverToBoxAdapter(child: _gallery()),
-              SliverToBoxAdapter(child: _buyBox()),
-              SliverToBoxAdapter(child: _reviewsSection()),
-              SliverToBoxAdapter(child: _orderSummary()),
+              const SliverToBoxAdapter(child: AppHeader(showTabs: false, showBackButton: true)),
+              SliverToBoxAdapter(child: _gallery(imageList)),
+              SliverToBoxAdapter(child: _buyBox(product)),
+              SliverToBoxAdapter(child: _reviewsSection(product.tags)),
+              SliverToBoxAdapter(child: _orderSummary(product)),
               const SliverToBoxAdapter(child: SectionTitle('You may also like')),
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -119,9 +147,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     childAspectRatio: 0.68,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                        (context, i) =>
-                        ProductCard(product: _suggestions[i], showHeart: true),
-                    childCount: _suggestions.length,
+                    (context, i) => ProductCard(
+                      product: suggestions[i],
+                      showHeart: true,
+                      onTap: () {
+                        context.read<ProductProvider>().setSelectedProduct(suggestions[i]);
+                      },
+                    ),
+                    childCount: suggestions.length,
                   ),
                 ),
               ),
@@ -138,7 +171,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             child: AnimatedSlide(
               offset: _showStickyBar ? Offset.zero : const Offset(0, 1),
               duration: const Duration(milliseconds: 220),
-              child: _stickyBar(),
+              child: _stickyBar(product),
             ),
           ),
         ],
@@ -148,7 +181,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ---------- Gallery ----------
 
-  Widget _gallery() {
+  Widget _gallery(List<String> images) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
@@ -161,9 +194,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   borderRadius: BorderRadius.circular(12),
                   child: PageView.builder(
                     controller: _pager,
-                    itemCount: _images.length,
+                    itemCount: images.length,
                     onPageChanged: (i) => setState(() => _image = i),
-                    itemBuilder: (_, i) => _imageTile(_images[i]),
+                    itemBuilder: (_, i) => _imageTile(images[i]),
                   ),
                 ),
                 Positioned(
@@ -186,7 +219,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             height: 54,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
-              itemCount: _images.length,
+              itemCount: images.length,
               separatorBuilder: (_, __) => const SizedBox(width: 8),
               itemBuilder: (_, i) => GestureDetector(
                 onTap: () => _pager.animateToPage(
@@ -205,7 +238,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: _imageTile(_images[i]),
+                    child: _imageTile(images[i]),
                   ),
                 ),
               ),
@@ -231,24 +264,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ---------- Buy box ----------
 
-  Widget _buyBox() {
+  Widget _buyBox(Product product) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Gisou Honey Infused Hair Oil (0.7 Fl Oz)',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          Text(
+            product.title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           Row(
-            children: const [
-              Text('5.0', style: TextStyle(fontSize: 12)),
-              SizedBox(width: 6),
-              RatingStars(),
-              SizedBox(width: 6),
-              Text('(100)', style: TextStyle(fontSize: 12)),
+            children: [
+              Text('${product.rating}', style: const TextStyle(fontSize: 12)),
+              const SizedBox(width: 6),
+              const RatingStars(),
+              const SizedBox(width: 6),
+              Text('(${product.reviewCount > 0 ? product.reviewCount : 100})',
+                  style: const TextStyle(fontSize: 12)),
             ],
           ),
           const SizedBox(height: 6),
@@ -256,10 +290,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             TextSpan(
               style: const TextStyle(fontSize: 12),
               children: [
-                const TextSpan(text: 'Brand: Gisou  '),
-                TextSpan(
+                TextSpan(text: 'Brand: ${product.brand.isNotEmpty ? product.brand : "Hair Haven"}  '),
+                const TextSpan(
                   text: 'Search for similar products',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Color(0xFF1A73E8),
                     decoration: TextDecoration.underline,
                   ),
@@ -268,10 +302,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             ),
           ),
           const SizedBox(height: 10),
-          const Text(
-            'Intense hydration, long-lasting frizz control, up to 450°F heat '
-                'protection, glossy shine, suitable for all hair types',
-            style: TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
+          Text(
+            product.description.isNotEmpty
+                ? product.description
+                : 'Intense hydration, long-lasting frizz control, up to 450°F heat protection, glossy shine, suitable for all hair types',
+            style: const TextStyle(fontSize: 12, color: Colors.black87, height: 1.4),
           ),
           const SizedBox(height: 12),
           const Text(
@@ -279,31 +314,28 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             style: TextStyle(fontSize: 10, color: Colors.black54),
           ),
           const SizedBox(height: 4),
-          const Text.rich(
-            TextSpan(
-              children: [
-                TextSpan(
-                  text: '\$50',
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-                ),
-                TextSpan(
-                  text: '.00',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
+          Text(
+            product.formattedPrice,
+            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           _qtyStepper(),
           const SizedBox(height: 12),
           KeyedSubtree(
             key: _ctaKey,
-            child: CustomButton(text: 'Add to cart', color: _brown, onPressed: (){},),
+            child: CustomButton(
+              text: 'Add to cart',
+              color: _brown,
+              onPressed: () => _handleAddToCart(product),
+            ),
           ),
           const SizedBox(height: 12),
           Center(
             child: GestureDetector(
-              onTap: () => setState(() => _wishlisted = !_wishlisted),
+              onTap: () {
+                setState(() => _wishlisted = !_wishlisted);
+                context.read<ProductProvider>().toggleWishlist(product.id);
+              },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -369,7 +401,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ---------- Reviews ----------
 
-  Widget _reviewsSection() {
+  Widget _reviewsSection(List<String> tags) {
+    final tagList = tags.isNotEmpty
+        ? tags
+        : const [
+            'Great smell',
+            'Nice gift',
+            'Good packaging',
+            'Elegant',
+            'Nice',
+            'Really pretty',
+          ];
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 28, 16, 0),
       child: Column(
@@ -418,7 +461,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     const Text('Tags:', style: TextStyle(fontSize: 11)),
-                    for (final t in _tags)
+                    for (final t in tagList)
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 8,
@@ -457,7 +500,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
               child: Divider(height: 1, color: Colors.black26),
             ),
           ],
-          CustomButton(text: 'View more reviews', color: _brown, onPressed: (){},),
+          CustomButton(
+            text: 'View more reviews',
+            color: _brown,
+            onPressed: () {},
+          ),
         ],
       ),
     );
@@ -465,29 +512,32 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ---------- Order summary ----------
 
-  Widget _orderSummary() {
+  Widget _orderSummary(Product product) {
+    final price = product.numericPrice > 0 ? product.numericPrice : 50.0;
+    final total = price * _qty;
+
     Widget line(String label, String value, {bool bold = false}) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-            ),
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+                ),
+              ),
+            ],
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
+        );
 
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -504,14 +554,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          line('Subtotal', '\$13,003.87'),
-          line('Saved', '-\$4,552.11'),
+          line('Subtotal', '\$${total.toStringAsFixed(2)}'),
+          line('Saved', '-\$0.00'),
           line('Promo code', 'Entry'),
           line('Shipping fee', 'Free'),
           const Divider(color: Colors.black26),
-          line('Total', '\$8,451.76', bold: true),
+          line('Total', '\$${total.toStringAsFixed(2)}', bold: true),
           const SizedBox(height: 10),
-          CustomButton(text: 'Place Order', color: _brown, onPressed: (){},),
+          CustomButton(
+            text: 'Place Order',
+            color: _brown,
+            onPressed: () => _handleAddToCart(product),
+          ),
           const SizedBox(height: 8),
           const Text(
             'Terms, refund policy and privacy notice text goes here.',
@@ -524,7 +578,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
 
   // ---------- Sticky bar ----------
 
-  Widget _stickyBar() {
+  Widget _stickyBar(Product product) {
     return Container(
       padding: EdgeInsets.fromLTRB(
         16,
@@ -542,9 +596,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '\$50.00',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              Text(
+                product.formattedPrice,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
               ),
               Text(
                 'Qty $_qty',
@@ -554,7 +608,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: CustomButton(text: 'Add to cart', color: _brown, onPressed: (){},),
+            child: CustomButton(
+              text: 'Add to cart',
+              color: _brown,
+              onPressed: () => _handleAddToCart(product),
+            ),
           ),
         ],
       ),

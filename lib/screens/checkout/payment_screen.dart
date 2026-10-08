@@ -1,19 +1,39 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/checkout/payment_success_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../models/order_model.dart';
+import '../../providers/cart_provider.dart';
+import '../../providers/order_provider.dart';
 import '../../widgets/checkout_header.dart';
 import '../../widgets/checkout_stepper.dart';
 import '../../widgets/checkout_text_field.dart';
 import '../../widgets/custom_button.dart';
+import 'payment_success_screen.dart';
 
 class PaymentScreen extends StatefulWidget {
   final String merchantName;
   final String totalAmount;
+  final String email;
+  final String fullName;
+  final String address;
+  final String state;
+  final String country;
+  final String postalCode;
+  final String telephone;
+  final String paymentMethod;
 
   const PaymentScreen({
     super.key,
     this.merchantName = 'Hair Haven',
     this.totalAmount = '\$16119.20',
+    this.email = '',
+    this.fullName = '',
+    this.address = '',
+    this.state = '',
+    this.country = 'Nigeria',
+    this.postalCode = '',
+    this.telephone = '',
+    this.paymentMethod = 'Card',
   });
 
   @override
@@ -36,12 +56,58 @@ class _PaymentScreenState extends State<PaymentScreen> {
     super.dispose();
   }
 
-  void _submit() {
-    // TODO: call your Opay payment request with _phone.text and _password.text
+  Future<void> _submit() async {
+    final cartProvider = context.read<CartProvider>();
+    final orderProvider = context.read<OrderProvider>();
+
+    final items = cartProvider.items;
+    final subtotal = cartProvider.subtotal;
+    final total = cartProvider.total;
+
+    final newOrder = OrderModel(
+      id: '',
+      items: items,
+      subtotal: subtotal,
+      totalAmount: total > 0 ? total : 50.0,
+      email: widget.email,
+      fullName: widget.fullName,
+      address: widget.address,
+      state: widget.state,
+      country: widget.country,
+      postalCode: widget.postalCode,
+      telephone: widget.telephone,
+      paymentMethod: widget.paymentMethod,
+      status: 'Confirmed',
+      createdAt: DateTime.now(),
+    );
+
+    final created = await orderProvider.placeOrder(newOrder);
+
+    if (!mounted) return;
+
+    if (created != null) {
+      await cartProvider.clearCart();
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const PaymentSuccessScreen(),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(orderProvider.errorMessage ?? 'Payment failed. Please try again.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final orderProvider = context.watch<OrderProvider>();
+
     return Scaffold(
       backgroundColor: _bg,
       body: Column(
@@ -75,7 +141,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
                   const SizedBox(height: 14),
 
-                  _opayCard(),
+                  _opayCard(orderProvider.isLoading),
                 ],
               ),
             ),
@@ -126,7 +192,6 @@ class _PaymentScreenState extends State<PaymentScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Small hint row: TODO confirm the exact wording against Figma
           Row(
             children: [
               _chip('Enter'),
@@ -160,7 +225,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   // ---------- Pay with Opay ----------
 
-  Widget _opayCard() {
+  Widget _opayCard(bool isLoading) {
     const labelStyle = TextStyle(fontSize: 11, color: Colors.black);
 
     return Container(
@@ -222,19 +287,15 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
           const SizedBox(height: 18),
 
-          GestureDetector(
-            onTap: _submit,
-            child: AbsorbPointer(
-              child: CustomButton(text: 'Next', color: _mint, onPressed: (){
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PaymentSuccessScreen(),
-                  ),
-                );
-              },),
-            ),
-          ),
+          isLoading
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF654039)),
+                )
+              : CustomButton(
+                  text: 'Next',
+                  color: _mint,
+                  onPressed: _submit,
+                ),
 
           const SizedBox(height: 8),
 

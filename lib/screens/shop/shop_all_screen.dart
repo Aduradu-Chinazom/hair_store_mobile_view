@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/product_detail/product_detail_screen.dart';
+import 'package:provider/provider.dart';
 
 import '../../models/product.dart';
+import '../../providers/product_provider.dart';
 import '../../widgets/app_footer.dart';
 import '../../widgets/app_header.dart';
 import '../../widgets/filter_sheet.dart';
 import '../../widgets/floating_nav_bar.dart';
 import '../../widgets/product_card.dart';
 import '../../widgets/section_title.dart';
+import '../product_detail/product_detail_screen.dart';
 
 class ShopAllScreen extends StatefulWidget {
   const ShopAllScreen({super.key});
@@ -18,45 +20,20 @@ class ShopAllScreen extends StatefulWidget {
 
 class _ShopAllScreenState extends State<ShopAllScreen> {
   static const _bg = Color(0xFFE8C8B8);
-  static const _brown = Color(0xFF654039);
 
   final ScrollController _recsController = ScrollController();
 
   int _tab = 0;
   int _navIndex = 0;
   int _page = 1;
-  String _sort = 'Featured';
-  Set<String> _filters = {};
 
-  // Dummy data. Replace with the API response later.
-  final List<Product> _products = List.generate(
-    9,
-        (i) => const Product(
-      title: 'Gisou Honey Infused Hair Oil',
-      price: '\$15.50',
-      size: '(30ml)',
-    ),
-  );
-
-  final List<Product> _recommendations = List.generate(
-    6,
-        (i) => const Product(
-      title: 'Olaplex No. 3 Hair Perfector',
-      price: '\$9.50',
-      size: '(100ml)',
-    ),
-  );
-
-  static const _brands = [
-    'Cantu',
-    'Jon Renau',
-    'Olaplex',
-    'Bio:Ionic',
-    'Gisou',
-    'Shein',
-    'Revlon',
-    'Remington',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ProductProvider>().loadShopAllData();
+    });
+  }
 
   @override
   void dispose() {
@@ -65,14 +42,15 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
   }
 
   Future<void> _openFilters() async {
+    final provider = context.read<ProductProvider>();
     final result = await showFilterSheet(
       context,
-      selected: _filters,
+      selected: provider.activeFilters,
       totalResults: 300,
     );
 
     if (result != null) {
-      setState(() => _filters = result);
+      provider.setFilters(result);
     }
   }
 
@@ -91,18 +69,23 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
     );
   }
 
-  // Opens the details page and passes the selected product.
   void _openProductDetails(Product product) {
+    context.read<ProductProvider>().setSelectedProduct(product);
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ProductDetailScreen(),
+        builder: (context) => ProductDetailScreen(product: product),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final provider = context.watch<ProductProvider>();
+    final products = provider.products;
+    final recommendations = provider.recommendations;
+    final brands = provider.brands;
+
     return Scaffold(
       backgroundColor: _bg,
       body: Stack(
@@ -112,24 +95,50 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
               SliverToBoxAdapter(
                 child: AppHeader(
                   selectedTab: _tab,
-                  onTabChanged: (i) => setState(() => _tab = i),
+                  onTabChanged: (i) {
+                    setState(() => _tab = i);
+                    final catName = AppHeader.tabs[i];
+                    provider.selectCategory(catName);
+                  },
                 ),
               ),
 
               SliverToBoxAdapter(child: _heroBanner()),
-              SliverToBoxAdapter(child: _titleBlock()),
-              SliverToBoxAdapter(child: _toolbar()),
+              SliverToBoxAdapter(child: _titleBlock(provider.selectedCategory, products.length)),
+              SliverToBoxAdapter(child: _toolbar(provider)),
 
-              // First 4 products
-              _productGrid(_products.sublist(0, 4)),
+              if (provider.isLoading && products.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(
+                      child: CircularProgressIndicator(color: Color(0xFF654039)),
+                    ),
+                  ),
+                )
+              else if (products.length >= 4) ...[
+                // First 4 products
+                _productGrid(products.sublist(0, 4)),
 
-              // Seasonal sales banner
-              SliverToBoxAdapter(
-                child: _seasonalBanner(),
-              ),
+                // Seasonal sales banner
+                SliverToBoxAdapter(
+                  child: _seasonalBanner(),
+                ),
 
-              // Remaining products
-              _productGrid(_products.sublist(4)),
+                // Remaining products
+                _productGrid(products.sublist(4)),
+              ] else if (products.isNotEmpty) ...[
+                _productGrid(products),
+              ] else ...[
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(32),
+                    child: Center(
+                      child: Text('No products found matching your filters.'),
+                    ),
+                  ),
+                ),
+              ],
 
               SliverToBoxAdapter(
                 child: _pagination(),
@@ -140,7 +149,7 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
               ),
 
               SliverToBoxAdapter(
-                child: _recommendationsRow(),
+                child: _recommendationsRow(recommendations),
               ),
 
               const SliverToBoxAdapter(
@@ -151,29 +160,34 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverGrid(
                   gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
+                      const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
                     mainAxisSpacing: 10,
                     crossAxisSpacing: 10,
                     childAspectRatio: 2.6,
                   ),
                   delegate: SliverChildBuilderDelegate(
-                        (context, i) => Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        _brands[i],
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                    (context, i) => GestureDetector(
+                      onTap: () {
+                        provider.setSearchQuery(brands[i]);
+                      },
+                      child: Container(
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          brands[i],
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.black87,
+                          ),
                         ),
                       ),
                     ),
-                    childCount: _brands.length,
+                    childCount: brands.length,
                   ),
                 ),
               ),
@@ -260,31 +274,31 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
     );
   }
 
-  Widget _titleBlock() {
+  Widget _titleBlock(String category, int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: const [
+        children: [
           Text(
-            'Home / All Categories',
-            style: TextStyle(
+            'Home / $category',
+            style: const TextStyle(
               fontSize: 11,
               color: Colors.black87,
             ),
           ),
-          SizedBox(height: 10),
-          Text(
+          const SizedBox(height: 10),
+          const Text(
             'Shop All',
             style: TextStyle(
               fontSize: 20,
               fontWeight: FontWeight.w700,
             ),
           ),
-          SizedBox(height: 2),
+          const SizedBox(height: 2),
           Text(
-            '300 products',
-            style: TextStyle(
+            '$count products',
+            style: const TextStyle(
               fontSize: 11,
               color: Colors.black54,
             ),
@@ -294,7 +308,7 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
     );
   }
 
-  Widget _toolbar() {
+  Widget _toolbar(ProductProvider provider) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -311,9 +325,9 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    _filters.isEmpty
+                    provider.activeFilters.isEmpty
                         ? 'Filter'
-                        : 'Filter (${_filters.length})',
+                        : 'Filter (${provider.activeFilters.length})',
                     style: const TextStyle(
                       fontSize: 12,
                     ),
@@ -323,19 +337,27 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
             ),
           ),
           PopupMenuButton<String>(
-            initialValue: _sort,
-            onSelected: (v) => setState(() => _sort = v),
+            initialValue: provider.sortBy,
+            onSelected: (v) => provider.setSortBy(v),
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: 'Featured',
                 child: Text('Featured'),
+              ),
+              PopupMenuItem(
+                value: 'Price: Low to High',
+                child: Text('Price: Low to High'),
+              ),
+              PopupMenuItem(
+                value: 'Price: High to Low',
+                child: Text('Price: High to Low'),
               ),
             ],
             child: _pill(
               Row(
                 children: [
                   Text(
-                    'Sort by: $_sort',
+                    'Sort by: ${provider.sortBy}',
                     style: const TextStyle(
                       fontSize: 12,
                     ),
@@ -373,18 +395,16 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
       sliver: SliverGrid(
         gridDelegate:
-        const SliverGridDelegateWithFixedCrossAxisCount(
+            const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           childAspectRatio: 0.68,
         ),
         delegate: SliverChildBuilderDelegate(
-              (context, i) => ProductCard(
+          (context, i) => ProductCard(
             product: items[i],
             showHeart: true,
-
-            // Pass the exact product that was tapped.
             onTap: () => _openProductDetails(items[i]),
           ),
           childCount: items.length,
@@ -449,26 +469,24 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
 
   Widget _pagination() {
     Widget num(int n) => GestureDetector(
-      onTap: () => setState(() => _page = n),
-      child: Container(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 6,
-          vertical: 2,
-        ),
-        decoration: BoxDecoration(
-          color: n == _page
-              ? Colors.white
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(3),
-        ),
-        child: Text(
-          '$n',
-          style: const TextStyle(
-            fontSize: 11,
+          onTap: () => setState(() => _page = n),
+          child: Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: 6,
+              vertical: 2,
+            ),
+            decoration: BoxDecoration(
+              color: n == _page ? Colors.white : Colors.transparent,
+              borderRadius: BorderRadius.circular(3),
+            ),
+            child: Text(
+              '$n',
+              style: const TextStyle(
+                fontSize: 11,
+              ),
+            ),
           ),
-        ),
-      ),
-    );
+        );
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
@@ -477,7 +495,7 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
         children: [
           GestureDetector(
             onTap: () => setState(
-                  () => _page = (_page - 1).clamp(1, 10),
+              () => _page = (_page - 1).clamp(1, 10),
             ),
             child: Row(
               children: const [
@@ -510,7 +528,7 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
           ),
           GestureDetector(
             onTap: () => setState(
-                  () => _page = (_page + 1).clamp(1, 10),
+              () => _page = (_page + 1).clamp(1, 10),
             ),
             child: Row(
               children: const [
@@ -532,7 +550,7 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
     );
   }
 
-  Widget _recommendationsRow() {
+  Widget _recommendationsRow(List<Product> recommendations) {
     return Column(
       children: [
         Padding(
@@ -568,18 +586,14 @@ class _ShopAllScreenState extends State<ShopAllScreen> {
             controller: _recsController,
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: _recommendations.length,
-            separatorBuilder: (_, __) =>
-            const SizedBox(width: 10),
+            itemCount: recommendations.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (_, i) => SizedBox(
               width: 120,
               child: ProductCard(
-                product: _recommendations[i],
+                product: recommendations[i],
                 showHeart: true,
-
-                // Pass the exact recommendation that was tapped.
-                onTap: () =>
-                    _openProductDetails(_recommendations[i]),
+                onTap: () => _openProductDetails(recommendations[i]),
               ),
             ),
           ),

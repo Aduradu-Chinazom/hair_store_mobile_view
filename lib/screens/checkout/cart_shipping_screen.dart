@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/checkout/payment_screen.dart';
+import 'package:provider/provider.dart';
 
-import '../../models/cart_item.dart';
+import '../../providers/cart_provider.dart';
 import '../../widgets/cart_item_tile.dart';
 import '../../widgets/checkout_header.dart';
 import '../../widgets/checkout_stepper.dart';
 import '../../widgets/checkout_text_field.dart';
 import '../../widgets/custom_button.dart';
+import '../../widgets/floating_nav_bar.dart';
 import '../../widgets/payment_method_tile.dart';
+import 'payment_screen.dart';
 
 class CartShippingScreen extends StatefulWidget {
   const CartShippingScreen({super.key});
@@ -19,28 +21,6 @@ class CartShippingScreen extends StatefulWidget {
 class _CartShippingScreenState extends State<CartShippingScreen> {
   static const _bg = Color(0xFFFFF3EC);
 
-  // Dummy data. Replace with your cart state or API response.
-  final List<CartItem> _items = [
-    CartItem(
-      title: '1pc/3pcs multicolor Synthetic Hair Extensions, Sew-In',
-      seller: 'Fajiahstore',
-      price: 3.99,
-      quantity: 2,
-    ),
-    CartItem(
-      title: '3pc Hair Beauty clips',
-      seller: 'Fajiahstore',
-      price: 3.99,
-      quantity: 2,
-    ),
-    CartItem(
-      title: '1 Pack Black Afro Kinkys Bulk Hair 12/16 Inch',
-      seller: 'Fajiahstore',
-      price: 3.99,
-      quantity: 2,
-    ),
-  ];
-
   static const _countries = [
     'Nigeria',
     'Ghana',
@@ -51,9 +31,18 @@ class _CartShippingScreenState extends State<CartShippingScreen> {
   ];
 
   final List<String> _months =
-  List.generate(12, (i) => (i + 1).toString().padLeft(2, '0'));
+      List.generate(12, (i) => (i + 1).toString().padLeft(2, '0'));
   final List<String> _years =
-  List.generate(15, (i) => (DateTime.now().year + i).toString());
+      List.generate(15, (i) => (DateTime.now().year + i).toString());
+
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _companyController = TextEditingController();
+  final TextEditingController _stateController = TextEditingController();
+  final TextEditingController _addressController = TextEditingController();
+  final TextEditingController _postalCodeController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   String _country = 'Nigeria';
   int _payment = 0; // 0 card, 1 wallet, 2 bank transfer
@@ -61,52 +50,129 @@ class _CartShippingScreenState extends State<CartShippingScreen> {
   String? _year;
 
   @override
+  void dispose() {
+    _emailController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _companyController.dispose();
+    _stateController.dispose();
+    _addressController.dispose();
+    _postalCodeController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _handleContinue() {
+    final cartProvider = context.read<CartProvider>();
+    if (cartProvider.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your cart is empty. Add items before checking out.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final email = _emailController.text.trim();
+    final firstName = _firstNameController.text.trim();
+    final lastName = _lastNameController.text.trim();
+    final address = _addressController.text.trim();
+    final state = _stateController.text.trim();
+    final phone = _phoneController.text.trim();
+
+    if (email.isEmpty || firstName.isEmpty || address.isEmpty || state.isEmpty || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill in required shipping fields (Email, Name, Address, State, Telephone)'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final paymentMethodName = _payment == 0
+        ? 'Card'
+        : _payment == 1
+            ? 'Wallet'
+            : 'Bank Transfer';
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentScreen(
+          totalAmount: cartProvider.formattedTotal,
+          email: email,
+          fullName: '$firstName $lastName'.trim(),
+          address: address,
+          state: state,
+          country: _country,
+          postalCode: _postalCodeController.text.trim(),
+          telephone: phone,
+          paymentMethod: paymentMethodName,
+        ),
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cartProvider = context.watch<CartProvider>();
+
     return Scaffold(
       backgroundColor: _bg,
-      body: Column(
+      body: Stack(
         children: [
-          const CheckoutHeader(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.only(bottom: 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: CheckoutStepper(currentStep: 1),
-                  ),
-                  const SizedBox(height: 32),
-
-                  _cartList(),
-
-                  const SizedBox(height: 40),
-
-                  _shippingForm(),
-
-                  const SizedBox(height: 32),
-
-                  _paymentMethod(),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const PaymentScreen(totalAmount: '\$16119.20'),
-                          ),
-                        );
-                      },
-                      child: AbsorbPointer(
-                        child: CustomButton(text: 'Continue', color: const Color(0xFF654039), onPressed: (){},),
+          Column(
+            children: [
+              const CheckoutHeader(),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(bottom: 110),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: CheckoutStepper(currentStep: 1),
                       ),
-                    ),
+                      const SizedBox(height: 32),
+
+                      _cartList(cartProvider),
+
+                      const SizedBox(height: 40),
+
+                      _shippingForm(),
+
+                      const SizedBox(height: 32),
+
+                      _paymentMethod(),
+                      const SizedBox(height: 24),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: CustomButton(
+                          text: 'Continue',
+                          color: const Color(0xFF654039),
+                          onPressed: _handleContinue,
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+
+          // Floating nav bar
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 16,
+            child: Center(
+              child: FloatingNavBar(
+                currentIndex: 1,
+                onTap: (i) {},
               ),
             ),
           ),
@@ -117,29 +183,42 @@ class _CartShippingScreenState extends State<CartShippingScreen> {
 
   // ---------- Cart ----------
 
-  Widget _cartList() {
-    if (_items.isEmpty) {
+  Widget _cartList(CartProvider cartProvider) {
+    final items = cartProvider.items;
+
+    if (items.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
         child: Center(
-          child: Text('Your cart is empty', style: TextStyle(fontSize: 12)),
+          child: Text('Your cart is empty', style: TextStyle(fontSize: 14)),
         ),
       );
     }
 
     return Column(
       children: [
-        for (final item in _items) ...[
+        for (final item in items) ...[
           CartItemTile(
             item: item,
-            onIncrement: () => setState(() => item.quantity++),
-            onDecrement: () => setState(() {
-              if (item.quantity > 1) item.quantity--;
-            }),
-            onDelete: () => setState(() => _items.remove(item)),
+            onIncrement: () => cartProvider.incrementQuantity(item),
+            onDecrement: () => cartProvider.decrementQuantity(item),
+            onDelete: () => cartProvider.removeItem(item),
           ),
           const SizedBox(height: 18),
         ],
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Total:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text(
+                cartProvider.formattedTotal,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF654039)),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -160,26 +239,50 @@ class _CartShippingScreenState extends State<CartShippingScreen> {
           ),
           const SizedBox(height: 14),
 
-          const CheckoutTextField(
+          CheckoutTextField(
+            controller: _emailController,
             hintText: 'Email',
             keyboardType: TextInputType.emailAddress,
           ),
           gap,
           Row(
-            children: const [
-              Expanded(child: CheckoutTextField(hintText: 'Full name')),
-              SizedBox(width: 12),
-              Expanded(child: CheckoutTextField(hintText: 'LastName')),
+            children: [
+              Expanded(
+                child: CheckoutTextField(
+                  controller: _firstNameController,
+                  hintText: 'Full name',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CheckoutTextField(
+                  controller: _lastNameController,
+                  hintText: 'LastName',
+                ),
+              ),
             ],
           ),
           gap,
-          const CheckoutTextField(hintText: 'Company (optional)'),
+          CheckoutTextField(
+            controller: _companyController,
+            hintText: 'Company (optional)',
+          ),
           gap,
           Row(
-            children: const [
-              Expanded(child: CheckoutTextField(hintText: 'State')),
-              SizedBox(width: 12),
-              Expanded(child: CheckoutTextField(hintText: 'Address')),
+            children: [
+              Expanded(
+                child: CheckoutTextField(
+                  controller: _stateController,
+                  hintText: 'State',
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: CheckoutTextField(
+                  controller: _addressController,
+                  hintText: 'Address',
+                ),
+              ),
             ],
           ),
           gap,
@@ -191,16 +294,18 @@ class _CartShippingScreenState extends State<CartShippingScreen> {
           ),
           gap,
           Row(
-            children: const [
+            children: [
               Expanded(
                 child: CheckoutTextField(
+                  controller: _postalCodeController,
                   hintText: 'Postal Code',
                   keyboardType: TextInputType.number,
                 ),
               ),
-              SizedBox(width: 12),
+              const SizedBox(width: 12),
               Expanded(
                 child: CheckoutTextField(
+                  controller: _phoneController,
                   hintText: 'Telephone',
                   keyboardType: TextInputType.phone,
                 ),

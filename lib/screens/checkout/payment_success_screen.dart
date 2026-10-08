@@ -11,7 +11,7 @@ class PaymentSuccessScreen extends StatelessWidget {
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const HomeScreen()),
-          (route) => false,
+      (route) => false,
     );
   }
 
@@ -62,8 +62,8 @@ class PaymentSuccessScreen extends StatelessWidget {
 
                   const Text(
                     'Your payment has been confirmed. Your payment will appear '
-                        'as a charge from Hair Haven. Please check your email for '
-                        'more details.',
+                    'as a charge from Hair Haven. Please check your email for '
+                    'more details.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,
@@ -74,11 +74,10 @@ class PaymentSuccessScreen extends StatelessWidget {
 
                   const SizedBox(height: 32),
 
-                  GestureDetector(
-                    onTap: () => _goHome(context),
-                    child: AbsorbPointer(
-                      child: CustomButton(text: 'Okay', color: _brown, onPressed: (){},),
-                    ),
+                  CustomButton(
+                    text: 'Okay',
+                    color: _brown,
+                    onPressed: () => _goHome(context),
                   ),
                 ],
               ),

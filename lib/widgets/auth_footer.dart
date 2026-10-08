@@ -22,7 +22,7 @@ class AuthFooter extends StatelessWidget {
           '@2026, HairHaven.com Inc',
           style: TextStyle(
             fontSize: 11,
-            color: Colors.black.withOpacity(0.6),
+            color: Colors.black.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 16),

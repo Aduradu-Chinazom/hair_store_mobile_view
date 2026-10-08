@@ -1,16 +1,85 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/login/login_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/social_button.dart';
-import '../password_assistance/password_assistance_screen.dart';
+import '../home/home_screen.dart';
+import '../login/login_screen.dart';
 
-class SignupScreen extends StatelessWidget {
+class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
 
   @override
+  State<SignupScreen> createState() => _SignupScreenState();
+}
+
+class _SignupScreenState extends State<SignupScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleSignup() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty) {
+      _showSnackBar('Please enter your email address');
+      return;
+    }
+
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar('Please enter a valid email address');
+      return;
+    }
+
+    if (password.isEmpty) {
+      _showSnackBar('Please create a password');
+      return;
+    }
+
+    if (password.length < 6) {
+      _showSnackBar('Password must be at least 6 characters');
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.register(email: email, password: password);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } else if (authProvider.errorMessage != null) {
+      _showSnackBar(authProvider.errorMessage!);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -22,27 +91,25 @@ class SignupScreen extends StatelessWidget {
           ),
         ),
         child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 24,
-            ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                const SizedBox(height: 100),
+                const SizedBox(height: 60),
 
                 // Logo
                 Column(
-                  children: [
+                  children: const [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.eco_outlined,
                           size: 24,
                           color: Colors.black,
                         ),
-                        const SizedBox(width: 2),
-                        const Text(
+                        SizedBox(width: 2),
+                        Text(
                           'Hair',
                           style: TextStyle(
                             fontSize: 17,
@@ -52,8 +119,7 @@ class SignupScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-
-                    const Text(
+                    Text(
                       'Haven',
                       style: TextStyle(
                         fontSize: 17,
@@ -79,25 +145,48 @@ class SignupScreen extends StatelessWidget {
                 const SizedBox(height: 25),
 
                 // Email field
-                const CustomTextField(
+                CustomTextField(
+                  controller: _emailController,
                   hintText: 'Enter your email',
+                  keyboardType: TextInputType.emailAddress,
                 ),
 
                 const SizedBox(height: 13),
 
-                // Continue button
-                CustomButton(
-                  text: 'Continue',
-                  color: const Color(0xFF654039),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => LoginScreen(),
-                      ),
-                    );
-                  },
+                const Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Password',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black,
+                    ),
+                  ),
                 ),
+
+                const SizedBox(height: 2),
+
+                CustomTextField(
+                  controller: _passwordController,
+                  hintText: '••••••••',
+                  obscureText: true,
+                ),
+
+                const SizedBox(height: 10),
+
+                // Continue button
+                authProvider.isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF654039),
+                        ),
+                      )
+                    : CustomButton(
+                        text: 'Continue',
+                        color: const Color(0xFF654039),
+                        onPressed: _handleSignup,
+                      ),
 
                 const SizedBox(height: 23),
 
@@ -111,13 +200,11 @@ class SignupScreen extends StatelessWidget {
                       ),
                     ),
                     Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Text(
                         'OR',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.55),
+                          color: Colors.black.withValues(alpha: 0.55),
                           fontSize: 11,
                         ),
                       ),
@@ -185,9 +272,10 @@ class SignupScreen extends StatelessWidget {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => LoginScreen(),
+                            builder: (context) => const LoginScreen(),
                           ),
-                        );                      },
+                        );
+                      },
                       child: const Text(
                         'Log in',
                         style: TextStyle(
@@ -199,6 +287,7 @@ class SignupScreen extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 30),
               ],
             ),
           ),

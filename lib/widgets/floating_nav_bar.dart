@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../screens/checkout/cart_shipping_screen.dart';
+import '../screens/home/home_screen.dart';
+import '../screens/profile/profile_screen.dart';
+import '../screens/wishlist/wishlist_screen.dart';
 
 class FloatingNavBar extends StatelessWidget {
   final int currentIndex;
@@ -19,13 +22,45 @@ class FloatingNavBar extends StatelessWidget {
     (Icons.person_outline, 'Profile'),
   ];
 
+  void _handleNavigation(BuildContext context, int index) {
+    onTap(index);
+    if (currentIndex == index) return;
+
+    Widget targetScreen;
+    switch (index) {
+      case 0:
+        targetScreen = const HomeScreen();
+        break;
+      case 1:
+        targetScreen = const CartShippingScreen();
+        break;
+      case 2:
+        targetScreen = const WishlistScreen();
+        break;
+      case 3:
+        targetScreen = const ProfileScreen();
+        break;
+      default:
+        return;
+    }
+
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, anim1, anim2) => targetScreen,
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 52,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.55),
+        color: Colors.white.withValues(alpha: 0.55),
         borderRadius: BorderRadius.circular(30),
         border: Border.all(color: Colors.black26, width: 0.8),
       ),
@@ -34,18 +69,7 @@ class FloatingNavBar extends StatelessWidget {
         children: List.generate(_items.length, (i) {
           final selected = i == currentIndex;
           return GestureDetector(
-            onTap: () {
-              if (i == 1) {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const CartShippingScreen(),
-                  ),
-                );
-              } else {
-                onTap(i);
-              }
-            },
+            onTap: () => _handleNavigation(context, i),
             child: Container(
               width: 66,
               height: 44,

@@ -1,13 +1,80 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/login/login_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../widgets/auth_footer.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/frosted_card.dart';
+import '../login/login_screen.dart';
 
-class SetNewPasswordScreen extends StatelessWidget {
+class SetNewPasswordScreen extends StatefulWidget {
   const SetNewPasswordScreen({super.key});
+
+  @override
+  State<SetNewPasswordScreen> createState() => _SetNewPasswordScreenState();
+}
+
+class _SetNewPasswordScreenState extends State<SetNewPasswordScreen> {
+  final TextEditingController _pass1Controller = TextEditingController();
+  final TextEditingController _pass2Controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _pass1Controller.dispose();
+    _pass2Controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleReset() async {
+    final p1 = _pass1Controller.text;
+    final p2 = _pass2Controller.text;
+
+    if (p1.isEmpty || p2.isEmpty) {
+      _showSnackBar('Please fill in both password fields');
+      return;
+    }
+
+    if (p1 != p2) {
+      _showSnackBar('Passwords do not match');
+      return;
+    }
+
+    if (p1.length < 8) {
+      _showSnackBar('Password must be at least 8 characters');
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.resetPassword(newPassword: p1);
+
+    if (!mounted) return;
+
+    if (success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password reset successfully! Please log in.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+        (route) => false,
+      );
+    } else if (auth.errorMessage != null) {
+      _showSnackBar(auth.errorMessage!);
+    }
+  }
+
+  void _showSnackBar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +166,8 @@ class SetNewPasswordScreen extends StatelessWidget {
 
                       const SizedBox(height: 4),
 
-                      const CustomTextField(
+                      CustomTextField(
+                        controller: _pass1Controller,
                         hintText: 'Create a new password',
                         obscureText: true,
                       ),
@@ -117,8 +185,9 @@ class SetNewPasswordScreen extends StatelessWidget {
 
                       const SizedBox(height: 4),
 
-                      const CustomTextField(
-                        hintText: 'Create a new password',
+                      CustomTextField(
+                        controller: _pass2Controller,
+                        hintText: 'Confirm new password',
                         obscureText: true,
                       ),
 
@@ -127,14 +196,7 @@ class SetNewPasswordScreen extends StatelessWidget {
                       CustomButton(
                         text: 'Continue',
                         color: const Color(0xFF654039),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => LoginScreen(),
-                            ),
-                          );
-                        },
+                        onPressed: _handleReset,
                       ),
 
                       const SizedBox(height: 10),
@@ -142,11 +204,12 @@ class SetNewPasswordScreen extends StatelessWidget {
                       Center(
                         child: GestureDetector(
                           onTap: () {
-                            Navigator.push(
+                            Navigator.pushAndRemoveUntil(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => LoginScreen(),
+                                builder: (context) => const LoginScreen(),
                               ),
+                              (route) => false,
                             );
                           },
                           child: Row(
@@ -155,14 +218,14 @@ class SetNewPasswordScreen extends StatelessWidget {
                               Icon(
                                 Icons.arrow_back,
                                 size: 11,
-                                color: Colors.black.withOpacity(0.5),
+                                color: Colors.black.withValues(alpha: 0.5),
                               ),
                               const SizedBox(width: 3),
                               Text(
                                 'Back to login',
                                 style: TextStyle(
                                   fontSize: 9,
-                                  color: Colors.black.withOpacity(0.5),
+                                  color: Colors.black.withValues(alpha: 0.5),
                                 ),
                               ),
                             ],

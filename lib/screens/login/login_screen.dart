@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:hairstore/screens/home/home_screen.dart';
-import 'package:hairstore/screens/password_assistance/password_assistance_screen.dart';
-import 'package:hairstore/screens/signup/signup_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/social_button.dart';
+import '../home/home_screen.dart';
+import '../password_assistance/password_assistance_screen.dart';
+import '../signup/signup_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,10 +17,66 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool rememberMe = false;
 
   @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _handleLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+
+    if (email.isEmpty) {
+      _showSnackBar('Please enter your email address');
+      return;
+    }
+
+    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(email)) {
+      _showSnackBar('Please enter a valid email address');
+      return;
+    }
+
+    if (password.isEmpty) {
+      _showSnackBar('Please enter your password');
+      return;
+    }
+
+    final authProvider = context.read<AuthProvider>();
+    final success = await authProvider.login(email: email, password: password);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+        (route) => false,
+      );
+    } else if (authProvider.errorMessage != null) {
+      _showSnackBar(authProvider.errorMessage!);
+    }
+  }
+
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
     return Scaffold(
       body: Container(
         width: double.infinity,
@@ -30,18 +88,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
         child: SafeArea(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 24),
             child: Column(
               children: [
-                const SizedBox(height: 100),
+                const SizedBox(height: 60),
 
                 // Logo
                 Column(
-                  children: [
+                  children: const [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(
                           Icons.eco_outlined,
                           size: 24,
@@ -58,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ],
                     ),
-                    const Text(
+                    Text(
                       'Haven',
                       style: TextStyle(
                         fontSize: 17,
@@ -109,8 +167,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 6),
 
-                const CustomTextField(
+                CustomTextField(
+                  controller: _emailController,
                   hintText: 'Enter your email',
+                  keyboardType: TextInputType.emailAddress,
                 ),
 
                 const SizedBox(height: 13),
@@ -130,7 +190,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
                 const SizedBox(height: 6),
 
-                const CustomTextField(
+                CustomTextField(
+                  controller: _passwordController,
                   hintText: '••••••••',
                   obscureText: true,
                 ),
@@ -155,7 +216,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             checkColor: const Color(0xFF654039),
                             side: BorderSide.none,
                             materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
+                                MaterialTapTargetSize.shrinkWrap,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -173,7 +234,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => PasswordAssistanceScreen(),
+                            builder: (context) => const PasswordAssistanceScreen(),
                           ),
                         );
                       },
@@ -192,18 +253,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 23),
 
                 // Sign in button
-                CustomButton(
-                  text: 'Continue',
-                  color: const Color(0xFF654039),
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => HomeScreen(),
+                authProvider.isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF654039),
+                        ),
+                      )
+                    : CustomButton(
+                        text: 'Continue',
+                        color: const Color(0xFF654039),
+                        onPressed: _handleLogin,
                       ),
-                    );
-                  },
-                ),
 
                 const SizedBox(height: 10),
 
@@ -235,7 +295,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => SignupScreen(),
+                            builder: (context) => const SignupScreen(),
                           ),
                         );
                       },
@@ -250,6 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 30),
               ],
             ),
           ),

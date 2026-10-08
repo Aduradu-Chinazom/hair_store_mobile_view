@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:hairstore/screens/set_new_password/set_new_password_screen.dart';
+import 'package:provider/provider.dart';
 
+import '../../providers/auth_provider.dart';
 import '../../widgets/auth_footer.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/frosted_card.dart';
 import '../login/login_screen.dart';
+import '../set_new_password/set_new_password_screen.dart';
 
 class PasswordResetScreen extends StatefulWidget {
-  const PasswordResetScreen({super.key});
+  final String emailOrPhone;
+
+  const PasswordResetScreen({
+    super.key,
+    this.emailOrPhone = 'cutiepatootie@gmail.com',
+  });
 
   @override
   State<PasswordResetScreen> createState() => _PasswordResetScreenState();
@@ -16,7 +23,7 @@ class PasswordResetScreen extends StatefulWidget {
 
 class _PasswordResetScreenState extends State<PasswordResetScreen> {
   final List<TextEditingController> _controllers =
-  List.generate(4, (_) => TextEditingController());
+      List.generate(4, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
 
   @override
@@ -35,6 +42,40 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       _focusNodes[index + 1].requestFocus();
     } else if (value.isEmpty && index > 0) {
       _focusNodes[index - 1].requestFocus();
+    }
+  }
+
+  Future<void> _handleVerify() async {
+    final otp = _controllers.map((c) => c.text).join();
+    if (otp.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter the 4-digit code'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final auth = context.read<AuthProvider>();
+    final success = await auth.verifyOtp(email: widget.emailOrPhone, otp: otp);
+
+    if (!mounted) return;
+
+    if (success) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => const SetNewPasswordScreen(),
+        ),
+      );
+    } else if (auth.errorMessage != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(auth.errorMessage!),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
     }
   }
 
@@ -107,9 +148,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
 
                       const SizedBox(height: 10),
 
-                      const Text(
-                        "We've sent a code to cutiepatootie@gmail.com",
-                        style: TextStyle(
+                      Text(
+                        "We've sent a code to ${widget.emailOrPhone}",
+                        style: const TextStyle(
                           fontSize: 11,
                           color: Colors.black,
                         ),
@@ -122,7 +163,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: List.generate(
                           4,
-                              (i) => _OtpBox(
+                          (i) => _OtpBox(
                             controller: _controllers[i],
                             focusNode: _focusNodes[i],
                             onChanged: (v) => _onChanged(v, i),
@@ -135,14 +176,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                       CustomButton(
                         text: 'Continue',
                         color: const Color(0xFF654039),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => SetNewPasswordScreen(),
-                            ),
-                          );
-                        },
+                        onPressed: _handleVerify,
                       ),
 
                       const SizedBox(height: 22),
@@ -161,7 +195,16 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                                 alignment: PlaceholderAlignment.baseline,
                                 baseline: TextBaseline.alphabetic,
                                 child: GestureDetector(
-                                  onTap: () {},
+                                  onTap: () {
+                                    context.read<AuthProvider>().sendPasswordAssistance(
+                                          emailOrPhone: widget.emailOrPhone,
+                                        );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Code resent!'),
+                                      ),
+                                    );
+                                  },
                                   child: const Text(
                                     'Click here to send again',
                                     style: TextStyle(
@@ -246,11 +289,12 @@ class _BackToLogin extends StatelessWidget {
     return Center(
       child: GestureDetector(
         onTap: () {
-          Navigator.push(
+          Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(
-              builder: (context) => LoginScreen(),
+              builder: (context) => const LoginScreen(),
             ),
+            (route) => false,
           );
         },
         child: Row(
@@ -259,14 +303,14 @@ class _BackToLogin extends StatelessWidget {
             Icon(
               Icons.arrow_back,
               size: 11,
-              color: Colors.black.withOpacity(0.5),
+              color: Colors.black.withValues(alpha: 0.5),
             ),
             const SizedBox(width: 3),
             Text(
               'Back to login',
               style: TextStyle(
                 fontSize: 9,
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
               ),
             ),
           ],
